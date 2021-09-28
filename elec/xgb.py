@@ -14,8 +14,14 @@ def parse_data(data_file):
     print('=' * 5, 'describe', '=' * 5)
     print(pd_data.describe())
 
+    is_null = pd.isnull(pd_data).values.any()
+    print(f'exist null value: {is_null}')
+
+    print('=' * 5, 'data', '=' * 5)
+    print(pd_data.head())
+
 
 if __name__ == '__main__':
-    train_file = '/mnt/sda5/dataset/GuoWang_FDGD_data/JSFD001_train.csv.csv'
-    test_file = '/mnt/sda5/dataset/GuoWang_FDGD_data/JSFD001_val.csv.csv'
-    parse_data(test_file)
+    train_file = '/mnt/sda5/dataset/GuoWangData/data_split/JSFD001_train.csv'
+    test_file = '/mnt/sda5/dataset/GuoWangData/data_split/JSFD001_val.csv'
+    parse_data(train_file)
