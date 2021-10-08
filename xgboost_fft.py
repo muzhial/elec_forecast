@@ -3,6 +3,7 @@ import glob
 import os
 
 import numpy as np
+from scipy.fftpack import fft
 import matplotlib.pyplot as plt
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 import pandas as pd
@@ -20,49 +21,43 @@ def time_features(df):
     df['hour'] = df['date_time'].dt.hour
     return df
 
-def series_data_day(data, day_interval=96):
-    data_merge = []
-    for d in range(day_interval):
-        day_split_data = data[d::day_interval, :]
-        split_data_y = pd.DataFrame(day_split_data[:, :1])
-        split_data_y = split_data_y.shift(-1)
-        split_data_y.dropna(inplace=True)
-
-        split_data_x = pd.DataFrame(day_split_data[:, 1:])
-
-        min_len = min(len(split_data_x), len(split_data_y))
-
-        split_data_x = split_data_x.values
-        split_data_y = split_data_y.values
-        split_data = np.concatenate(
-            (split_data_x[:min_len, :], split_data_y[:min_len, :]),
-            axis=1)
-
-        data_merge.append(split_data)
-
-    data_merge = np.concatenate(data_merge, axis=0)
-    return data_merge
+def fft_features(data):
+    features = []
+    for i in range(data.shape[1]):
+        fft_complex = fft(data[:, i])
+        fft_mag = [np.sqrt(
+            np.real(x) * np.real(x) + np.imag(x) * np.imag(x)
+            ) for x in fft_complex]
+        # fft_mag = np.log(fft_mag)
+        features.append(fft_mag)
+    return np.asarray(features).T
 
 def series_data(data, day_interval=96):
-    day_num = len(data) // day_interval
     data_merge = []
     for d in range(day_interval):
         day_split_data = data[d::day_interval, :]
         split_data_y = pd.DataFrame(day_split_data[:, :1])
         split_data_y = split_data_y.shift(-3)
         split_data_y.dropna(inplace=True)
-        # split_data_y = pd.concat(
-        #     [split_data_y, split_data_y.shift(-2)], axis=1)
 
         split_data_x = pd.DataFrame(day_split_data[:, 1:])
-        split_data_x = pd.concat(
-            [split_data_x, split_data_x.shift(-1), split_data_x.shift(-2)], axis=1)
-        split_data_x.dropna(inplace=True)
-
-        min_len = min(len(split_data_x), len(split_data_y))
 
         split_data_x = split_data_x.values
         split_data_y = split_data_y.values
+        split_data_x_fft = fft_features(split_data_x)
+        split_data_x = np.concatenate(
+            (split_data_x, split_data_x_fft),
+            axis=1)
+
+        split_data_x = pd.DataFrame(split_data_x)
+        split_data_x = pd.concat(
+            [split_data_x, split_data_x.shift(-1), split_data_x.shift(-2)],
+            axis=1)
+        split_data_x.dropna(inplace=True)
+
+        min_len = min(len(split_data_x), len(split_data_y))
+        split_data_x = split_data_x.values
+
         split_data = np.concatenate(
             (split_data_x[:min_len, :], split_data_y[:min_len, :]),
             axis=1)
@@ -118,8 +113,8 @@ def main():
         test_mat = parse_data(file_item[1])
         print('parse data', train_mat.shape, test_mat.shape)
 
-        train_data = series_data_day(train_mat)
-        test_data = series_data_day(test_mat)
+        train_data = series_data(train_mat)
+        test_data = series_data(test_mat)
         print('merge data', train_data.shape, test_data.shape)
         mse, predictions = xgboost_forecast(train_data, test_data)
         # print(f'MSE: {mse}')
@@ -130,6 +125,7 @@ def main():
             os.path.basename(file_item[0]),
             mse])
         print(f'MSE: {mse}')
+
     mse_df = pd.DataFrame(mses)
     mse_df.to_csv('mse.csv')
 
